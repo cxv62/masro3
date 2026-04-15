@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>نظام مستودع الحاسب الآلي - الكلية التقنية</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css">
+    <style>
+        body { background-color: #0b0f19; color: #f8fafc; font-family: 'Segoe UI', Tahoma; }
+        .hero-section { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 25px; border-bottom: 3px solid #38bdf8; margin-bottom: 20px; }
+        .card-custom { background: #1e293b; border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .sensor-val { font-size: 2rem; font-weight: bold; color: #38bdf8; }
+        .stock-badge { background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 10px; text-align: center; }
+        .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
+    </style>
+</head>
+<body>
+
+<div class="hero-section text-center">
+    <h2>نظام إدارة مستودع الحاسب الآلي (صمام)</h2>
+    <div class="names-list mx-auto mt-2" style="max-width: 800px; font-size: 0.8rem; border: 1px solid #38bdf8; padding: 5px; border-radius: 10px;">
+        <strong>فريق العمل:</strong> سالم رفق العنزي (قائد) | خالد محمد | عبد الله سعد | طلال شاكر | محمد ماين | أحمد علاوي | البراء | صالح سلمان | سطام سليمان | نواف منيف | عبد المجيد عيد | عبد الرحمن فارس | رعد العويضه
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-3 mb-4">
+        <div class="col-md col-6"><div class="stock-badge"><small>شواحن</small><span id="count-شواحن" class="stock-num">0</span></div></div>
+        <div class="col-md col-6"><div class="stock-badge"><small>طابعات</small><span id="count-طابعات" class="stock-num">0</span></div></div>
+        <div class="col-md col-6"><div class="stock-badge"><small>أحبار</small><span id="count-أحبار" class="stock-num">0</span></div></div>
+        <div class="col-md col-6"><div class="stock-badge"><small>حواسب</small><span id="count-حواسب" class="stock-num">0</span></div></div>
+        <div class="col-md col-12"><div class="stock-badge" style="border-color: #fbbf24;"><small>فارات/سماعات</small><span id="count-فارات" class="stock-num">0</span></div></div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-3">
+            <div class="card card-custom p-4 text-center h-100">
+                <h5>حساسات البيئة</h5>
+                <hr>
+                <div class="mb-3"><small>الحرارة</small><div class="sensor-val text-info"><span id="temp">22</span>°C</div></div>
+                <div><small>الدخان</small><div id="fire" class="fw-bold text-success">سليم</div></div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="card card-custom p-4 h-100">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>إدارة العمليات</h5>
+                    <h5 class="text-warning">الإجمالي العام: <span id="totalStock">0</span></h5>
+                </div>
+                <hr>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">الصنف:</label>
+                        <select id="itemSelect" class="form-select bg-dark text-white border-secondary">
+                            <option value="شواحن">شواحن لابتوب</option>
+                            <option value="طابعات">طابعات ليزر</option>
+                            <option value="أحبار">أحبار طابعات</option>
+                            <option value="حواسب">أجهزة حاسب (PC)</option>
+                            <option value="فارات">فارات وسماعات</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">الكمية:</label>
+                        <input type="number" id="qty" class="form-control bg-dark text-white border-secondary" value="1" min="1">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">اسم المستلم/المورد:</label>
+                        <input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="ادخل الاسم هنا">
+                    </div>
+                    <div class="col-12 d-flex gap-2">
+                        <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">تسجيل وارد (+)</button>
+                        <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">تسجيل منصرف (-)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 text-center mt-3">
+            <div class="card card-custom p-4">
+                <h5 class="mb-3 text-start">سجل حركة المستودع الحية</h5>
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>العملية</th>
+                                <th>الصنف</th>
+                                <th>الكمية</th>
+                                <th>الشخص</th>
+                                <th>التوقيت</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // توزيع المخزون لكل صنف
+    let inventory = { "شواحن": 0, "طابعات": 0, "أحبار": 0, "حواسب": 0, "فارات": 0 };
+    let totalStock = 0;
+
+    // محاكاة الحساسات
+    setInterval(() => {
+        let currentTemp = (21 + Math.random() * 4).toFixed(1);
+        document.getElementById('temp').innerText = currentTemp;
+        document.getElementById('temp').style.color = currentTemp > 24 ? "#ef4444" : "#38bdf8";
+    }, 3000);
+
+    function updateStock(type) {
+        let itemKey = document.getElementById('itemSelect').value;
+        let quantity = parseInt(document.getElementById('qty').value) || 1;
+        let person = document.getElementById('personName').value.trim() || "غير مسجل";
+        let time = new Date().toLocaleTimeString('ar-SA');
+
+        if(type === 'وارد') {
+            inventory[itemKey] += quantity;
+            totalStock += quantity;
+        } else {
+            if(inventory[itemKey] >= quantity) {
+                inventory[itemKey] -= quantity;
+                totalStock -= quantity;
+            } else {
+                alert("الكمية غير كافية لهذا الصنف!"); return;
+            }
+        }
+
+        // تحديث الأرقام في الشاشة
+        document.getElementById(`count-${itemKey}`).innerText = inventory[itemKey];
+        document.getElementById('totalStock').innerText = totalStock;
+
+        // إضافة سجل
+        let row = `<tr>
+            <td><span class="badge ${type === 'وارد' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
+            <td>${document.getElementById('itemSelect').options[document.getElementById('itemSelect').selectedIndex].text}</td>
+            <td>${quantity}</td>
+            <td class="text-info">${person}</td>
+            <td>${time}</td>
+        </tr>`;
+        document.getElementById('logs').innerHTML = row + document.getElementById('logs').innerHTML;
+        document.getElementById('personName').value = "";
+    }
+</script>
+</body>
+</html>
