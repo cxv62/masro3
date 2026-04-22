@@ -13,6 +13,8 @@
         .stock-badge { background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 10px; text-align: center; }
         .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
         #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
+        .scan-success { color: #10b981; animation: flash 0.5s; }
+        @keyframes flash { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -55,7 +57,7 @@
                     <div class="col-md-5 text-center">
                         <h6 class="mb-3 text-info">ماسح الباركود الكاميرا 📷</h6>
                         <div id="reader"></div>
-                        <div id="scan-result" class="small text-warning mt-2 fw-bold"></div>
+                        <div id="scan-status" class="mt-2 fw-bold" style="min-height: 25px;"></div>
                     </div>
                     <div class="col-md-7 border-start border-secondary">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -94,7 +96,7 @@
             <div class="card card-custom p-4 text-center">
                 <h5 class="mb-3 text-start">سجل حركة المستودع الحية 🧾</h5>
                 <div class="table-responsive">
-                    <table class="table table-dark table-striped">
+                    <table class="table table-dark table-striped text-center">
                         <thead>
                             <tr>
                                 <th>العملية</th>
@@ -116,7 +118,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-    // 1. الفايربيس وقراءة الحساسات
+    // 1. الفايربيس
     const firebaseConfig = { databaseURL: "https://masro3-65d46-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
@@ -137,18 +139,29 @@
         }
     });
 
-    // 2. تشغيل الكاميرا والباركود
+    // 2. الباركود المطور
     function onScanSuccess(decodedText) {
-        const items = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
-        let cleanText = decodedText.trim();
-        if(items.includes(cleanText)) {
-            document.getElementById('itemSelect').value = cleanText;
-            document.getElementById('scan-result').innerText = "✅ تم مسح الصنف: " + cleanText;
+        let cleanText = decodedText.trim().replace(/\s/g, ''); // تنظيف المسافات نهائياً
+        const statusDiv = document.getElementById('scan-status');
+        const items = {
+            "شواحن": "شواحن",
+            "طابعات": "طابعات",
+            "أحبار": "أحبار",
+            "حواسب": "حواسب",
+            "فارات": "فارات"
+        };
+
+        if(items[cleanText]) {
+            document.getElementById('itemSelect').value = items[cleanText];
+            statusDiv.innerHTML = `<span class="scan-success">✅ تم العثور على: ${items[cleanText]}</span>`;
+            // اهتزاز بسيط لو الجوال يدعم
+            if (navigator.vibrate) navigator.vibrate(100);
+        } else {
+            statusDiv.innerHTML = `<span class="text-danger">❌ صنف غير معروف: "${decodedText}"</span>`;
         }
     }
 
-    // التأكد من تحميل الكاميرا
-    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 20, qrbox: 250 });
     html5QrcodeScanner.render(onScanSuccess);
 
     // 3. المخزون
@@ -183,6 +196,7 @@
         </tr>`;
         document.getElementById('logs').innerHTML = row + document.getElementById('logs').innerHTML;
         document.getElementById('personName').value = "";
+        document.getElementById('scan-status').innerText = "";
     }
 </script>
 </body>
