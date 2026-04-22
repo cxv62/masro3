@@ -12,7 +12,7 @@
         .sensor-val { font-size: 2rem; font-weight: bold; color: #38bdf8; }
         .stock-badge { background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 10px; text-align: center; }
         .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
-        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 1px solid #38bdf8; }
+        #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
     </style>
 </head>
 <body>
@@ -37,7 +37,7 @@
     <div class="row g-4">
         <div class="col-md-3">
             <div class="card card-custom p-3 text-center h-100">
-                <h5 class="mb-3 border-bottom pb-2">الرقابة البيئية 📡</h5>
+                <h5 class="mb-3 border-bottom pb-2 text-info">الرقابة البيئية 📡</h5>
                 <div class="mb-3"><small>الحرارة</small><div class="sensor-val"><span id="temp">--</span>°C</div></div>
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
@@ -52,10 +52,10 @@
         <div class="col-md-9">
             <div class="card card-custom p-4 h-100">
                 <div class="row">
-                    <div class="col-md-5">
-                        <h6 class="mb-3 text-info">ماسح الباركود السريع 📷</h6>
+                    <div class="col-md-5 text-center">
+                        <h6 class="mb-3 text-info">ماسح الباركود الكاميرا 📷</h6>
                         <div id="reader"></div>
-                        <div id="scan-result" class="small text-warning mt-2 text-center"></div>
+                        <div id="scan-result" class="small text-warning mt-2 fw-bold"></div>
                     </div>
                     <div class="col-md-7 border-start border-secondary">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -78,11 +78,11 @@
                                 <input type="number" id="qty" class="form-control bg-dark text-white border-secondary" value="1" min="1">
                             </div>
                             <div class="col-12">
-                                <input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="اسم المستلم أو المورد">
+                                <input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="اسم المسؤول">
                             </div>
                             <div class="col-12 d-flex gap-2">
-                                <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">تسجيل وارد (+)</button>
-                                <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">تسجيل منصرف (-)</button>
+                                <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">وارد (+)</button>
+                                <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">منصرف (-)</button>
                             </div>
                         </div>
                     </div>
@@ -91,10 +91,10 @@
         </div>
 
         <div class="col-12 mt-3">
-            <div class="card card-custom p-4">
-                <h5 class="mb-3 text-start">سجل حركة المستودع الحية (LOG)</h5>
+            <div class="card card-custom p-4 text-center">
+                <h5 class="mb-3 text-start">سجل حركة المستودع الحية 🧾</h5>
                 <div class="table-responsive">
-                    <table class="table table-dark table-striped text-center">
+                    <table class="table table-dark table-striped">
                         <thead>
                             <tr>
                                 <th>العملية</th>
@@ -116,11 +116,11 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
+    // 1. الفايربيس وقراءة الحساسات
     const firebaseConfig = { databaseURL: "https://masro3-65d46-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // تحديث الحساسات من الفايربيس
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -129,21 +129,61 @@
             document.getElementById('smoke-val').innerText = data.Smoke || "0";
             if(data.Smoke > 2000) {
                 document.getElementById('fire-status').innerText = "⚠️ تحذير دخان!";
-                document.getElementById('fire-status').className = "fw-bold text-danger";
+                document.getElementById('fire-status').className = "fw-bold text-danger mt-1";
             } else {
                 document.getElementById('fire-status').innerText = "سليم ✅";
-                document.getElementById('fire-status').className = "fw-bold text-success";
+                document.getElementById('fire-status').className = "fw-bold text-success mt-1";
             }
         }
     });
 
-    // تشغيل ماسح الباركود
+    // 2. تشغيل الكاميرا والباركود
     function onScanSuccess(decodedText) {
         const items = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
         let cleanText = decodedText.trim();
         if(items.includes(cleanText)) {
             document.getElementById('itemSelect').value = cleanText;
-            document.getElementById('scan-result').innerText = "✅ تم التعرف تلقائياً على: " + cleanText;
+            document.getElementById('scan-result').innerText = "✅ تم مسح الصنف: " + cleanText;
         }
     }
-    let html5Q
+
+    // التأكد من تحميل الكاميرا
+    let html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
+    html5QrcodeScanner.render(onScanSuccess);
+
+    // 3. المخزون
+    let inventory = { "شواحن": 0, "طابعات": 0, "أحبار": 0, "حواسب": 0, "فارات": 0 };
+    let totalStock = 0;
+
+    function updateStock(type) {
+        let itemKey = document.getElementById('itemSelect').value;
+        let quantity = parseInt(document.getElementById('qty').value) || 1;
+        let person = document.getElementById('personName').value.trim() || "سالم";
+        let time = new Date().toLocaleTimeString('ar-SA');
+
+        if(type === 'وارد') {
+            inventory[itemKey] += quantity;
+            totalStock += quantity;
+        } else {
+            if(inventory[itemKey] >= quantity) {
+                inventory[itemKey] -= quantity;
+                totalStock -= quantity;
+            } else { alert("المخزون غير كافٍ!"); return; }
+        }
+
+        document.getElementById(`count-${itemKey}`).innerText = inventory[itemKey];
+        document.getElementById('totalStock').innerText = totalStock;
+
+        let row = `<tr>
+            <td><span class="badge ${type === 'وارد' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
+            <td>${document.getElementById('itemSelect').options[document.getElementById('itemSelect').selectedIndex].text}</td>
+            <td>${quantity}</td>
+            <td class="text-info">${person}</td>
+            <td>${time}</td>
+        </tr>`;
+        document.getElementById('logs').innerHTML = row + document.getElementById('logs').innerHTML;
+        document.getElementById('personName').value = "";
+    }
+</script>
+</body>
+</html>
