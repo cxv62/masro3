@@ -46,10 +46,7 @@
                 <div class="mb-3"><small>الحرارة</small><div class="sensor-val"><span id="temp">--</span>°C</div></div>
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
-                <div class="mb-2">
-                    <small>نسبة الدخان (MQ-2)</small>
-                    <div id="smoke-val" class="fw-bold" style="font-size: 1.5rem;">--</div>
-                </div>
+                <div class="mb-2"><small>نسبة الدخان (MQ-2)</small><div id="smoke-val" class="fw-bold" style="font-size: 1.5rem;">--</div></div>
                 <div id="fire-status" class="fw-bold p-2 rounded">بانتظار البيانات...</div>
                 <button onclick="clearAllData()" class="btn btn-clear">🧹 تصفير السجل والمخزون</button>
             </div>
@@ -117,7 +114,6 @@
 
     let currentStock = {};
 
-    // مزامنة المخزون باستمرار
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val() || {};
         currentStock = data;
@@ -128,7 +124,6 @@
         });
     });
 
-    // مزامنة الحساسات
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -143,7 +138,6 @@
         }
     });
 
-    // مزامنة السجل
     db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
         const data = snapshot.val();
         let html = "";
@@ -158,7 +152,6 @@
         document.getElementById('logs').innerHTML = html;
     });
 
-    // معالجة الباركود مع فحص الكمية
     let scanner;
     function onScanSuccess(decodedText) {
         let parts = decodedText.split(',');
@@ -167,14 +160,10 @@
             let qty = parseInt(amount) || 0;
             let stockNow = currentStock[item] || 0;
 
-            // الفحص الحاسم للكمية عند الصرف
+            // التحقق من المخزون في الماسح الآلي بالرسالة الجديدة
             if (action === 'منصرف') {
-                if (stockNow <= 0) {
-                    alert("⚠️ خطأ باركود: الصنف " + item + " غير متوفر حالياً (المخزون 0)!");
-                    return;
-                }
                 if (qty > stockNow) {
-                    alert("⚠️ عذراً سالم: الكمية المطلوبة بالباركود (" + qty + ") أكبر من المتوفر بالمستودع حالياً (" + stockNow + ")!");
+                    alert("الصنف المطلوب غير متوفر في المخزن.");
                     return;
                 }
             }
@@ -195,7 +184,6 @@
     }
     startScanner();
 
-    // وظيفة الإرسال مع فحص الكمية لليدوي
     function sendToFirebase(type) {
         let item = document.getElementById('itemSelect').value;
         let qty = parseInt(document.getElementById('qty').value) || 0;
@@ -204,12 +192,8 @@
         let stockNow = currentStock[item] || 0;
 
         if (type === 'منصرف') {
-            if (stockNow <= 0) {
-                alert("⚠️ لا يمكن الصرف: الصنف غير متوفر نهائياً!");
-                return;
-            }
             if (qty > stockNow) {
-                alert("⚠️ تنبيه: الكمية المطلوبة (" + qty + ") غير متوفرة! المتوفر هو " + stockNow + " فقط.");
+                alert("الصنف المطلوب غير متوفر في المخزن.");
                 return;
             }
         }
@@ -221,7 +205,7 @@
     }
 
     function clearAllData() {
-        if(confirm("سالم، متأكد تبي تصفر المخزون والسجل؟")) {
+        if(confirm("سيتم تصفير المخزون والسجلات فقط، هل أنت متأكد؟")) {
             db.ref("Inventory").remove();
             db.ref("Logs").remove().then(() => {
                 alert("تم التصفير بنجاح.");
