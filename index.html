@@ -14,7 +14,6 @@
         .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
         #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
         .rescan-btn { display: none; margin-top: 10px; width: 100%; font-weight: bold; }
-        .status-box { min-height: 50px; margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
@@ -43,10 +42,7 @@
                 <div class="mb-3"><small>الحرارة</small><div class="sensor-val"><span id="temp">--</span>°C</div></div>
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
-                <div>
-                    <small>حالة المستودع</small>
-                    <div id="fire-status" class="fw-bold text-success mt-1">سليم ✅</div>
-                </div>
+                <div><small>حالة المستودع</small><div id="fire-status" class="fw-bold text-success mt-1">سليم ✅</div></div>
             </div>
         </div>
 
@@ -54,34 +50,19 @@
             <div class="card card-custom p-4 h-100">
                 <div class="row">
                     <div class="col-md-5 text-center">
-                        <h6 class="mb-3 text-info">الماسح الآلي 📷</h6>
+                        <h6 class="mb-3 text-info">الماسح الآلي (مزامنة فورية) 📷</h6>
                         <div id="reader"></div>
-                        <div id="scan-status" class="status-box"></div>
-                        <button id="rescanButton" onclick="startScanner()" class="btn btn-primary rescan-btn">اضغط للمسح مرة أخرى 🔄</button>
+                        <button id="rescanButton" onclick="startScanner()" class="btn btn-primary rescan-btn">مسح جديد 🔄</button>
                     </div>
                     <div class="col-md-7 border-start border-secondary">
                         <h5>إدارة العمليات</h5>
                         <div class="row g-3 mt-1">
-                            <div class="col-md-8">
-                                <label class="form-label">الصنف:</label>
-                                <select id="itemSelect" class="form-select bg-dark text-white border-secondary">
-                                    <option value="شواحن">شواحن لابتوب</option>
-                                    <option value="طابعات">طابعات ليزر</option>
-                                    <option value="أحبار">أحبار طابعات</option>
-                                    <option value="حواسب">أجهزة حاسب (PC)</option>
-                                    <option value="فارات">فارات وسماعات</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">الكمية:</label>
-                                <input type="number" id="qty" class="form-control bg-dark text-white border-secondary" value="1">
-                            </div>
-                            <div class="col-12">
-                                <input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="المورد / المستلم">
-                            </div>
+                            <div class="col-md-8"><label class="form-label">الصنف:</label><select id="itemSelect" class="form-select bg-dark text-white border-secondary"><option value="شواحن">شواحن لابتوب</option><option value="طابعات">طابعات ليزر</option><option value="أحبار">أحبار طابعات</option><option value="حواسب">أجهزة حاسب (PC)</option><option value="فارات">فارات وسماعات</option></select></div>
+                            <div class="col-md-4"><label class="form-label">الكمية:</label><input type="number" id="qty" class="form-control bg-dark text-white border-secondary" value="1"></div>
+                            <div class="col-12"><input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="المورد / المستلم"></div>
                             <div class="col-12 d-flex gap-2">
-                                <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">وارد</button>
-                                <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">منصرف</button>
+                                <button onclick="sendToFirebase('وارد')" class="btn btn-success flex-fill fw-bold">وارد</button>
+                                <button onclick="sendToFirebase('منصرف')" class="btn btn-danger flex-fill fw-bold">منصرف</button>
                             </div>
                         </div>
                     </div>
@@ -91,18 +72,10 @@
 
         <div class="col-12 mt-3">
             <div class="card card-custom p-4 text-center">
-                <h5 class="mb-3 text-start">سجل حركة المستودع 🧾</h5>
+                <h5 class="mb-3 text-start">السجل السحابي المباشر 🧾</h5>
                 <div class="table-responsive">
                     <table class="table table-dark table-striped">
-                        <thead>
-                            <tr>
-                                <th>العملية</th>
-                                <th>الصنف</th>
-                                <th>الكمية</th>
-                                <th>الجهة</th>
-                                <th>الوقت</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>العملية</th><th>الصنف</th><th>الكمية</th><th>الجهة</th><th>الوقت</th></tr></thead>
                         <tbody id="logs"></tbody>
                     </table>
                 </div>
@@ -119,6 +92,17 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // 1. الاستماع للتغييرات (هذا اللي يخلي اللاب توب يلحق الجوال)
+    db.ref("Inventory").on("value", (snapshot) => {
+        const data = snapshot.val();
+        if(data) {
+            for(let item in data) {
+                if(document.getElementById(`count-${item}`))
+                    document.getElementById(`count-${item}`).innerText = data[item];
+            }
+        }
+    });
+
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -129,63 +113,58 @@
         }
     });
 
-    let inventory = { "شواحن": 0, "طابعات": 0, "أحبار": 0, "حواسب": 0, "فارات": 0 };
-    let scanner;
+    db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
+        const data = snapshot.val();
+        let html = "";
+        if(data) {
+            Object.values(data).reverse().forEach(log => {
+                html += `<tr>
+                    <td><span class="badge ${log.type === 'وارد' ? 'bg-success' : 'bg-danger'}">${log.type}</span></td>
+                    <td>${log.item}</td><td>${log.qty}</td><td>${log.person}</td><td>${log.time}</td>
+                </tr>`;
+            });
+            document.getElementById('logs').innerHTML = html;
+        }
+    });
 
+    // 2. نظام الباركود
+    let scanner;
     function onScanSuccess(decodedText) {
-        // إيقاف الماسح فوراً لمنع التكرار
         scanner.clear();
         document.getElementById('rescanButton').style.display = 'block';
-
-        const statusDiv = document.getElementById('scan-status');
         let parts = decodedText.split(',');
-
         if(parts.length === 4) {
             let [item, amount, source, action] = parts.map(p => p.trim());
             document.getElementById('itemSelect').value = item;
             document.getElementById('qty').value = amount;
             document.getElementById('personName').value = source;
-            
-            updateStock(action === 'منصرف' ? 'منصرف' : 'وارد');
-            statusDiv.innerHTML = `<div class="bg-success text-white p-2 rounded">✅ تم التسجيل: ${source} (${amount})</div>`;
-        } else {
-            statusDiv.innerHTML = `<div class="bg-danger text-white p-2 rounded">❌ خطأ في صيغة الباركود</div>`;
+            sendToFirebase(action);
         }
     }
 
     function startScanner() {
         document.getElementById('rescanButton').style.display = 'none';
-        document.getElementById('scan-status').innerHTML = '<span class="text-info">وضع الاستعداد... وجّه الباركود للكاميرا</span>';
         scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
         scanner.render(onScanSuccess);
     }
-
-    // تشغيل الماسح لأول مرة
     startScanner();
 
-    function updateStock(type) {
-        let itemKey = document.getElementById('itemSelect').value;
-        let quantity = parseInt(document.getElementById('qty').value) || 0;
-        let person = document.getElementById('personName').value || "نظام آلي";
+    // 3. الإرسال للفايربيس (عشان الكل يشوف التحديث)
+    function sendToFirebase(type) {
+        let item = document.getElementById('itemSelect').value;
+        let qty = parseInt(document.getElementById('qty').value) || 0;
+        let person = document.getElementById('personName').value || "مستخدم الجوال";
         let time = new Date().toLocaleTimeString('ar-SA');
 
-        if(type === 'وارد') {
-            inventory[itemKey] += quantity;
-        } else {
-            if(inventory[itemKey] >= quantity) inventory[itemKey] -= quantity;
-            else { alert("الكمية غير كافية!"); return; }
-        }
-
-        document.getElementById(`count-${itemKey}`).innerText = inventory[itemKey];
-
-        let row = `<tr>
-            <td><span class="badge ${type === 'وارد' ? 'bg-success' : 'bg-danger'}">${type}</span></td>
-            <td>${itemKey}</td>
-            <td>${quantity}</td>
-            <td>${person}</td>
-            <td>${time}</td>
-        </tr>`;
-        document.getElementById('logs').innerHTML = row + document.getElementById('logs').innerHTML;
+        // جلب القيمة الحالية وتحديثها
+        db.ref(`Inventory/${item}`).once('value').then(snap => {
+            let current = snap.val() || 0;
+            let newQty = type === 'وارد' ? current + qty : current - qty;
+            if(newQty < 0) { alert("المخزون لا يكفي!"); return; }
+            
+            db.ref(`Inventory/${item}`).set(newQty);
+            db.ref("Logs").push({ item, qty, person, type, time });
+        });
     }
 </script>
 </body>
