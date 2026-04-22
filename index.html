@@ -114,6 +114,7 @@
 
     let currentStock = {};
 
+    // مزامنة المخزون
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val() || {};
         currentStock = data;
@@ -124,6 +125,7 @@
         });
     });
 
+    // مزامنة الحساسات
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -138,6 +140,7 @@
         }
     });
 
+    // مزامنة السجل
     db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
         const data = snapshot.val();
         let html = "";
@@ -160,14 +163,16 @@
             let qty = parseInt(amount) || 0;
             let stockNow = currentStock[item] || 0;
 
-            // التحقق من المخزون في الماسح الآلي بالرسالة الجديدة
+            // هنا الحماية الحقيقية للباركود
             if (action === 'منصرف') {
                 if (qty > stockNow) {
                     alert("الصنف المطلوب غير متوفر في المخزن.");
-                    return;
+                    // لا نكمل العملية هنا أبداً
+                    return; 
                 }
             }
 
+            // إذا عدى الفحص، الحين نسجل في الواجهة ونرسل للفايربيس
             scanner.clear();
             document.getElementById('rescanButton').style.display = 'block';
             document.getElementById('itemSelect').value = item;
@@ -191,6 +196,7 @@
         let time = new Date().toLocaleTimeString('ar-SA');
         let stockNow = currentStock[item] || 0;
 
+        // حماية إضافية في حالة الإدخال اليدوي
         if (type === 'منصرف') {
             if (qty > stockNow) {
                 alert("الصنف المطلوب غير متوفر في المخزن.");
@@ -199,7 +205,9 @@
         }
 
         db.ref(`Inventory/${item}`).transaction((current) => {
-            return type === 'وارد' ? (current || 0) + qty : (current || 0) - qty;
+            let newCount = type === 'وارد' ? (current || 0) + qty : (current || 0) - qty;
+            // ضمان نهائي إن الفايربيس ما يسجل سالب لو صار أي غلط بالواجهة
+            return newCount < 0 ? current : newCount; 
         });
         db.ref("Logs").push({ item, qty, person, type, time });
     }
@@ -208,7 +216,7 @@
         if(confirm("سيتم تصفير المخزون والسجلات فقط، هل أنت متأكد؟")) {
             db.ref("Inventory").remove();
             db.ref("Logs").remove().then(() => {
-                alert("تم التصفير بنجاح.");
+                alert("تم تصفير النظام بنجاح.");
                 location.reload();
             });
         }
