@@ -16,7 +16,6 @@
         .rescan-btn { display: none; margin-top: 10px; width: 100%; font-weight: bold; }
         .btn-clear { background-color: #dc3545; border: none; color: white; margin-top: 20px; font-size: 0.8rem; opacity: 0.6; }
         .btn-clear:hover { opacity: 1; }
-        /* أنيميشن للتنبيه في حالة الخطر */
         .blink { animation: blinker 1s linear infinite; color: #ff4444 !important; }
         @keyframes blinker { 50% { opacity: 0; } }
     </style>
@@ -48,7 +47,7 @@
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
                 <div class="mb-2">
-                    <small>حالة الدخان </small>
+                    <small>نسبة الدخان (MQ-2)</small>
                     <div id="smoke-val" class="fw-bold" style="font-size: 1.5rem;">--</div>
                 </div>
                 <div id="fire-status" class="fw-bold p-2 rounded">بانتظار البيانات...</div>
@@ -118,6 +117,7 @@
 
     let currentStock = {};
 
+    // مزامنة المخزون باستمرار
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val() || {};
         currentStock = data;
@@ -128,30 +128,22 @@
         });
     });
 
-    // مراقبة الدخان والحساسات بالتفصيل
+    // مزامنة الحساسات
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
             document.getElementById('temp').innerText = data.Temperature || "--";
             document.getElementById('hum').innerText = data.Humidity || "--";
-            
             let smoke = data.Smoke || 0;
             document.getElementById('smoke-val').innerText = smoke;
-
             let statusBox = document.getElementById('fire-status');
-            if(smoke < 500) {
-                statusBox.innerText = "الجو صافي ✅";
-                statusBox.className = "fw-bold p-2 rounded bg-success text-white";
-            } else if(smoke >= 500 && smoke <= 1000) {
-                statusBox.innerText = "دخان خفيف ⚠️";
-                statusBox.className = "fw-bold p-2 rounded bg-warning text-dark";
-            } else {
-                statusBox.innerText = "خطر حريق! 🔥";
-                statusBox.className = "fw-bold p-2 rounded bg-danger text-white blink";
-            }
+            if(smoke < 500) { statusBox.innerText = "الجو صافي ✅"; statusBox.className = "fw-bold p-2 rounded bg-success text-white"; }
+            else if(smoke >= 500 && smoke <= 1000) { statusBox.innerText = "دخان خفيف ⚠️"; statusBox.className = "fw-bold p-2 rounded bg-warning text-dark"; }
+            else { statusBox.innerText = "خطر حريق! 🔥"; statusBox.className = "fw-bold p-2 rounded bg-danger text-white blink"; }
         }
     });
 
+    // مزامنة السجل
     db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
         const data = snapshot.val();
         let html = "";
@@ -166,13 +158,29 @@
         document.getElementById('logs').innerHTML = html;
     });
 
+    // معالجة الباركود مع فحص الكمية
     let scanner;
     function onScanSuccess(decodedText) {
-        scanner.clear();
-        document.getElementById('rescanButton').style.display = 'block';
         let parts = decodedText.split(',');
         if(parts.length === 4) {
             let [item, amount, source, action] = parts.map(p => p.trim());
+            let qty = parseInt(amount) || 0;
+            let stockNow = currentStock[item] || 0;
+
+            // الفحص الحاسم للكمية عند الصرف
+            if (action === 'منصرف') {
+                if (stockNow <= 0) {
+                    alert("⚠️ خطأ باركود: الصنف " + item + " غير متوفر حالياً (المخزون 0)!");
+                    return;
+                }
+                if (qty > stockNow) {
+                    alert("⚠️ عذراً سالم: الكمية المطلوبة بالباركود (" + qty + ") أكبر من المتوفر بالمستودع حالياً (" + stockNow + ")!");
+                    return;
+                }
+            }
+
+            scanner.clear();
+            document.getElementById('rescanButton').style.display = 'block';
             document.getElementById('itemSelect').value = item;
             document.getElementById('qty').value = amount;
             document.getElementById('personName').value = source;
@@ -187,17 +195,23 @@
     }
     startScanner();
 
+    // وظيفة الإرسال مع فحص الكمية لليدوي
     function sendToFirebase(type) {
         let item = document.getElementById('itemSelect').value;
         let qty = parseInt(document.getElementById('qty').value) || 0;
         let person = document.getElementById('personName').value || "سالم";
         let time = new Date().toLocaleTimeString('ar-SA');
-        
         let stockNow = currentStock[item] || 0;
 
         if (type === 'منصرف') {
-            if (stockNow <= 0) { alert("هذا الصنف غير متوفر!"); return; }
-            if (qty > stockNow) { alert("الكمية غير كافية! المتوفر: " + stockNow); return; }
+            if (stockNow <= 0) {
+                alert("⚠️ لا يمكن الصرف: الصنف غير متوفر نهائياً!");
+                return;
+            }
+            if (qty > stockNow) {
+                alert("⚠️ تنبيه: الكمية المطلوبة (" + qty + ") غير متوفرة! المتوفر هو " + stockNow + " فقط.");
+                return;
+            }
         }
 
         db.ref(`Inventory/${item}`).transaction((current) => {
@@ -207,7 +221,7 @@
     }
 
     function clearAllData() {
-        if(confirm("سيتم تصفير المخزون والسجلات فقط، هل أنت متأكد؟")) {
+        if(confirm("سالم، متأكد تبي تصفر المخزون والسجل؟")) {
             db.ref("Inventory").remove();
             db.ref("Logs").remove().then(() => {
                 alert("تم التصفير بنجاح.");
