@@ -9,6 +9,7 @@
         body { background-color: #0b0f19; color: #f8fafc; font-family: 'Segoe UI', Tahoma; }
         .hero-section { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 25px; border-bottom: 3px solid #38bdf8; margin-bottom: 20px; }
         .card-custom { background: #1e293b; border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .sensor-val { font-size: 2rem; font-weight: bold; color: #38bdf8; }
         .stock-badge { background: #0f172a; border: 1px solid #38bdf8; border-radius: 10px; padding: 10px; text-align: center; }
         .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
         #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
@@ -43,7 +44,10 @@
                 <div class="mb-3"><small>الحرارة</small><div class="sensor-val"><span id="temp">--</span>°C</div></div>
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
-                <div><small>حالة المستودع</small><div id="fire-status" class="fw-bold text-success mt-1">سليم ✅</div></div>
+                <div>
+                    <small>حالة المستودع</small>
+                    <div id="fire-status" class="fw-bold text-success mt-1">سليم ✅</div>
+                </div>
                 <button onclick="clearAllData()" class="btn btn-clear">🧹 تصفير السجل والمخزون</button>
             </div>
         </div>
@@ -104,12 +108,11 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-    // الرابط المحدث من صورتك الأخيرة
     const firebaseConfig = { databaseURL: "https://mashro3-be2b3-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // مزامنة العدادات
+    // مزامنة العدادات (المخزون)
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val();
         const items = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
@@ -119,14 +122,14 @@
         });
     });
 
-    // مزامنة الحساسات
+    // مزامنة الحساسات (الحرارة والرطوبة والدخان)
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
             document.getElementById('temp').innerText = data.Temperature || "--";
             document.getElementById('hum').innerText = data.Humidity || "--";
             document.getElementById('fire-status').innerText = data.Smoke > 2000 ? "⚠️ حريق!" : "سليم ✅";
-            document.getElementById('fire-status').className = data.Smoke > 2000 ? "text-danger" : "text-success";
+            document.getElementById('fire-status').className = data.Smoke > 2000 ? "text-danger" : "text-success fw-bold mt-1";
         }
     });
 
@@ -167,7 +170,6 @@
     }
     startScanner();
 
-    // إرسال البيانات للفايربيس
     function sendToFirebase(type) {
         let item = document.getElementById('itemSelect').value;
         let qty = parseInt(document.getElementById('qty').value) || 0;
@@ -180,11 +182,12 @@
         db.ref("Logs").push({ item, qty, person, type, time });
     }
 
-    // وظيفة التصفير الشاملة اللي طلبته
     function clearAllData() {
-        if(confirm("هل أنت متأكد؟ هذا بيمسح كل السجلات والعدادات عشان تبدأ العرض على نظافة.")) {
-            db.ref("/").remove().then(() => {
-                alert("تم التصفير! الموقع الحين جاهز للعرض.");
+        if(confirm("هل أنت متأكد من تصفير النظام؟ بيمسح السجلات والعدادات بس.")) {
+            // نمسح فقط المخزون والسجلات ونترك بيانات الحساسات (WMS)
+            db.ref("Inventory").remove();
+            db.ref("Logs").remove().then(() => {
+                alert("تم التصفير بنجاح! الموقع جاهز للعرض.");
                 location.reload();
             });
         }
