@@ -14,13 +14,14 @@
         .stock-num { display: block; font-size: 1.5rem; font-weight: bold; color: #38bdf8; }
         #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
         .scan-success { color: #10b981; }
+        .last-barcode { font-size: 0.8rem; color: #94a3b8; background: #0f172a; padding: 5px; border-radius: 5px; margin-top: 5px; display: inline-block; }
     </style>
 </head>
 <body>
 
 <div class="hero-section text-center">
     <h2>نظام إدارة مستودع الحاسب الآلي (صمام)</h2>
-    <div class="names-list mx-auto mt-2" style="max-width: 950px; font-size: 0.85rem; border: 1px solid #38bdf8; padding: 10px; border-radius: 10px; line-height: 1.6;">
+    <div class="names-list mx-auto mt-2" style="max-width: 950px; font-size: 0.85rem; border: 1px solid #38bdf8; padding: 10px; border-radius: 10px;">
         <strong>فريق العمل:</strong> 
         سالم رفق العنزي | خالد محمد | عبد الله سعد | طلال شاكر | محمد ماين | أحمد علاوي | البراء | صالح سلمان | سطام سليمان | نواف منيف | عبد المجيد عيد | عبد الرحمن فارس | رعد العويضه
     </div>
@@ -54,9 +55,10 @@
             <div class="card card-custom p-4 h-100">
                 <div class="row">
                     <div class="col-md-5 text-center">
-                        <h6 class="mb-3 text-info">ماسح الباركود الكاميرا 📷</h6>
+                        <h6 class="mb-3 text-info">ماسح الباركود التلقائي 📷</h6>
                         <div id="reader"></div>
-                        <div id="scan-status" class="small text-warning mt-2 fw-bold" style="min-height: 40px;"></div>
+                        <div id="scan-status" class="mt-2 fw-bold" style="min-height: 40px;"></div>
+                        <div id="barcode-display" class="last-barcode">الكود: لا يوجد</div>
                     </div>
                     <div class="col-md-7 border-start border-secondary">
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -65,7 +67,7 @@
                         </div>
                         <div class="row g-3">
                             <div class="col-md-8">
-                                <label class="form-label">الصنف:</label>
+                                <label class="form-label">الصنف المختبر:</label>
                                 <select id="itemSelect" class="form-select bg-dark text-white border-secondary">
                                     <option value="شواحن">شواحن لابتوب</option>
                                     <option value="طابعات">طابعات ليزر</option>
@@ -82,8 +84,8 @@
                                 <input type="text" id="personName" class="form-control bg-dark text-white border-secondary" placeholder="اسم المسؤول">
                             </div>
                             <div class="col-12 d-flex gap-2">
-                                <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">وارد (+)</button>
-                                <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">منصرف (-)</button>
+                                <button onclick="updateStock('وارد')" class="btn btn-success flex-fill fw-bold">وارد يدوي (+)</button>
+                                <button onclick="updateStock('منصرف')" class="btn btn-danger flex-fill fw-bold">منصرف يدوي (-)</button>
                             </div>
                         </div>
                     </div>
@@ -117,68 +119,59 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
 <script>
-    // 1. إعدادات الفايربيس
     const firebaseConfig = { databaseURL: "https://masro3-65d46-default-rtdb.firebaseio.com/" };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // تحديث الحساسات تلقائياً
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
             document.getElementById('temp').innerText = data.Temperature || "0";
             document.getElementById('hum').innerText = data.Humidity || "0";
             document.getElementById('smoke-val').innerText = data.Smoke || "0";
-            if(data.Smoke > 2000) {
-                document.getElementById('fire-status').innerText = "⚠️ تحذير دخان!";
-                document.getElementById('fire-status').className = "fw-bold text-danger mt-1";
-            } else {
-                document.getElementById('fire-status').innerText = "سليم ✅";
-                document.getElementById('fire-status').className = "fw-bold text-success mt-1";
-            }
+            document.getElementById('fire-status').innerText = data.Smoke > 2000 ? "⚠️ تحذير دخان!" : "سليم ✅";
+            document.getElementById('fire-status').className = data.Smoke > 2000 ? "fw-bold text-danger mt-1" : "fw-bold text-success mt-1";
         }
     });
 
-    // 2. نظام الباركود الذكي (حل مشكلة الروابط الخارجية)
-    let barcodeMap = {
-        "https://q.me/-qr.com/z7zyy4sx": "شواحن" // الرابط اللي طلع في صورتك صار الحين هو "شواحن"
-    };
+    let inventory = { "شواحن": 0, "طابعات": 0, "أحبار": 0, "حواسب": 0, "فارات": 0 };
+    let totalStock = 0;
+    let barcodeMap = { "https://q.me/-qr.com/z7zyy4sx": "شواحن" };
+    let lastScannedTime = 0; // لمنع التسجيل المتكرر في نفس اللحظة
 
     function onScanSuccess(decodedText) {
+        const now = Date.now();
+        if (now - lastScannedTime < 2000) return; // انتظر ثانيتين بين كل مسحة
+
         let cleanText = decodedText.trim();
+        document.getElementById('barcode-display').innerText = "الكود: " + cleanText;
         const statusDiv = document.getElementById('scan-status');
         
-        // إذا الكلمة مباشرة (شواحن، طابعات...)
+        let targetItem = "";
         const basicItems = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
-        
-        if(basicItems.includes(cleanText)) {
-            document.getElementById('itemSelect').value = cleanText;
-            statusDiv.innerHTML = `<span class="scan-success">✅ تم التعرف: ${cleanText}</span>`;
-        } 
-        // إذا كان رابط زي اللي في صورتك
-        else if(barcodeMap[cleanText]) {
-            document.getElementById('itemSelect').value = barcodeMap[cleanText];
-            statusDiv.innerHTML = `<span class="scan-success">✅ تم التعرف على الرابط: ${barcodeMap[cleanText]}</span>`;
-        }
-        // إذا الباركود غريب، نربطه تلقائياً باللي مختاره المستخدم الحين
+
+        if(basicItems.includes(cleanText)) targetItem = cleanText;
+        else if(barcodeMap[cleanText]) targetItem = barcodeMap[cleanText];
         else {
-            let current = document.getElementById('itemSelect').value;
-            barcodeMap[cleanText] = current;
-            statusDiv.innerHTML = `<span class="text-info">💡 تم ربط هذا الباركود بـ (${current})</span>`;
+            targetItem = document.getElementById('itemSelect').value;
+            barcodeMap[cleanText] = targetItem;
+        }
+
+        if(targetItem) {
+            lastScannedTime = now;
+            document.getElementById('itemSelect').value = targetItem;
+            statusDiv.innerHTML = `<span class="scan-success">✅ تم تسجيل (وارد) تلقائي: ${targetItem}</span>`;
+            updateStock('وارد'); // هذي هي الإضافة التلقائية
         }
     }
 
-    let scanner = new Html5QrcodeScanner("reader", { fps: 15, qrbox: 250 });
+    let scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
     scanner.render(onScanSuccess);
-
-    // 3. إدارة المخزون
-    let inventory = { "شواحن": 0, "طابعات": 0, "أحبار": 0, "حواسب": 0, "فارات": 0 };
-    let totalStock = 0;
 
     function updateStock(type) {
         let itemKey = document.getElementById('itemSelect').value;
         let quantity = parseInt(document.getElementById('qty').value) || 1;
-        let person = document.getElementById('personName').value.trim() || "سالم";
+        let person = document.getElementById('personName').value.trim() || "نظام التلقائي";
         let time = new Date().toLocaleTimeString('ar-SA');
 
         if(type === 'وارد') {
@@ -202,7 +195,6 @@
             <td>${time}</td>
         </tr>`;
         document.getElementById('logs').innerHTML = row + document.getElementById('logs').innerHTML;
-        document.getElementById('personName').value = "";
     }
 </script>
 </body>
