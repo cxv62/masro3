@@ -112,17 +112,18 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // مزامنة العدادات (المخزون)
+    let currentStock = {};
+
     db.ref("Inventory").on("value", (snapshot) => {
-        const data = snapshot.val();
+        const data = snapshot.val() || {};
+        currentStock = data;
         const items = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
         items.forEach(item => {
-            let val = (data && data[item]) ? data[item] : 0;
+            let val = data[item] || 0;
             document.getElementById(`count-${item}`).innerText = val;
         });
     });
 
-    // مزامنة الحساسات (الحرارة والرطوبة والدخان)
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -133,7 +134,6 @@
         }
     });
 
-    // مزامنة السجل
     db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
         const data = snapshot.val();
         let html = "";
@@ -148,7 +148,6 @@
         document.getElementById('logs').innerHTML = html;
     });
 
-    // نظام الباركود
     let scanner;
     function onScanSuccess(decodedText) {
         scanner.clear();
@@ -175,6 +174,19 @@
         let qty = parseInt(document.getElementById('qty').value) || 0;
         let person = document.getElementById('personName').value || "مستخدم الجوال";
         let time = new Date().toLocaleTimeString('ar-SA');
+        
+        let stockNow = currentStock[item] || 0;
+
+        if (type === 'منصرف') {
+            if (stockNow <= 0) {
+                alert("هذا الصنف غير متوفر حالياً بالمستودع!");
+                return;
+            }
+            if (qty > stockNow) {
+                alert("الكمية المطلوبة أكبر من المتوفر! (الموجود حالياً: " + stockNow + ")");
+                return;
+            }
+        }
 
         db.ref(`Inventory/${item}`).transaction((current) => {
             return type === 'وارد' ? (current || 0) + qty : (current || 0) - qty;
@@ -183,11 +195,10 @@
     }
 
     function clearAllData() {
-        if(confirm("هل أنت متأكد من تصفير النظام؟ بيمسح السجلات والعدادات بس.")) {
-            // نمسح فقط المخزون والسجلات ونترك بيانات الحساسات (WMS)
+        if(confirm("سيتم تصفير المخزون والسجلات، هل أنت متأكد؟")) {
             db.ref("Inventory").remove();
             db.ref("Logs").remove().then(() => {
-                alert("تم التصفير بنجاح! الموقع جاهز للعرض.");
+                alert("تم تصفير النظام بنجاح.");
                 location.reload();
             });
         }
