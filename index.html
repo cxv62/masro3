@@ -16,6 +16,9 @@
         .rescan-btn { display: none; margin-top: 10px; width: 100%; font-weight: bold; }
         .btn-clear { background-color: #dc3545; border: none; color: white; margin-top: 20px; font-size: 0.8rem; opacity: 0.6; }
         .btn-clear:hover { opacity: 1; }
+        /* أنيميشن للتنبيه في حالة الخطر */
+        .blink { animation: blinker 1s linear infinite; color: #ff4444 !important; }
+        @keyframes blinker { 50% { opacity: 0; } }
     </style>
 </head>
 <body>
@@ -44,10 +47,11 @@
                 <div class="mb-3"><small>الحرارة</small><div class="sensor-val"><span id="temp">--</span>°C</div></div>
                 <div class="mb-3"><small>الرطوبة</small><div class="sensor-val" style="color: #10b981;"><span id="hum">--</span>%</div></div>
                 <hr>
-                <div>
-                    <small>حالة المستودع</small>
-                    <div id="fire-status" class="fw-bold text-success mt-1">سليم ✅</div>
+                <div class="mb-2">
+                    <small>حالة الدخان </small>
+                    <div id="smoke-val" class="fw-bold" style="font-size: 1.5rem;">--</div>
                 </div>
+                <div id="fire-status" class="fw-bold p-2 rounded">بانتظار البيانات...</div>
                 <button onclick="clearAllData()" class="btn btn-clear">🧹 تصفير السجل والمخزون</button>
             </div>
         </div>
@@ -124,13 +128,27 @@
         });
     });
 
+    // مراقبة الدخان والحساسات بالتفصيل
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
             document.getElementById('temp').innerText = data.Temperature || "--";
             document.getElementById('hum').innerText = data.Humidity || "--";
-            document.getElementById('fire-status').innerText = data.Smoke > 2000 ? "⚠️ حريق!" : "سليم ✅";
-            document.getElementById('fire-status').className = data.Smoke > 2000 ? "text-danger" : "text-success fw-bold mt-1";
+            
+            let smoke = data.Smoke || 0;
+            document.getElementById('smoke-val').innerText = smoke;
+
+            let statusBox = document.getElementById('fire-status');
+            if(smoke < 500) {
+                statusBox.innerText = "الجو صافي ✅";
+                statusBox.className = "fw-bold p-2 rounded bg-success text-white";
+            } else if(smoke >= 500 && smoke <= 1000) {
+                statusBox.innerText = "دخان خفيف ⚠️";
+                statusBox.className = "fw-bold p-2 rounded bg-warning text-dark";
+            } else {
+                statusBox.innerText = "خطر حريق! 🔥";
+                statusBox.className = "fw-bold p-2 rounded bg-danger text-white blink";
+            }
         }
     });
 
@@ -172,20 +190,14 @@
     function sendToFirebase(type) {
         let item = document.getElementById('itemSelect').value;
         let qty = parseInt(document.getElementById('qty').value) || 0;
-        let person = document.getElementById('personName').value || "مستخدم الجوال";
+        let person = document.getElementById('personName').value || "سالم";
         let time = new Date().toLocaleTimeString('ar-SA');
         
         let stockNow = currentStock[item] || 0;
 
         if (type === 'منصرف') {
-            if (stockNow <= 0) {
-                alert("هذا الصنف غير متوفر حالياً بالمستودع!");
-                return;
-            }
-            if (qty > stockNow) {
-                alert("الكمية المطلوبة أكبر من المتوفر! (الموجود حالياً: " + stockNow + ")");
-                return;
-            }
+            if (stockNow <= 0) { alert("هذا الصنف غير متوفر!"); return; }
+            if (qty > stockNow) { alert("الكمية غير كافية! المتوفر: " + stockNow); return; }
         }
 
         db.ref(`Inventory/${item}`).transaction((current) => {
@@ -195,10 +207,10 @@
     }
 
     function clearAllData() {
-        if(confirm("سيتم تصفير المخزون والسجلات، هل أنت متأكد؟")) {
+        if(confirm("سيتم تصفير المخزون والسجلات فقط، هل أنت متأكد؟")) {
             db.ref("Inventory").remove();
             db.ref("Logs").remove().then(() => {
-                alert("تم تصفير النظام بنجاح.");
+                alert("تم التصفير بنجاح.");
                 location.reload();
             });
         }
