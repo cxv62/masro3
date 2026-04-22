@@ -16,11 +16,22 @@
         .rescan-btn { display: none; margin-top: 10px; width: 100%; font-weight: bold; }
         .btn-clear { background-color: #dc3545; border: none; color: white; margin-top: 20px; font-size: 0.8rem; opacity: 0.6; }
         .btn-clear:hover { opacity: 1; }
+        
+        /* تنبيه الجوال المخصص */
+        #custom-alert {
+            display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; width: 90%; max-width: 400px; padding: 15px;
+            background-color: #dc3545; color: white; text-align: center;
+            border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-weight: bold;
+        }
+
         .blink { animation: blinker 1s linear infinite; color: #ff4444 !important; }
         @keyframes blinker { 50% { opacity: 0; } }
     </style>
 </head>
 <body>
+
+<div id="custom-alert">الصنف المطلوب غير متوفر في المخزن.</div>
 
 <div class="hero-section text-center">
     <h2>نظام إدارة مستودع الحاسب الآلي (صمام)</h2>
@@ -89,18 +100,6 @@
                 </div>
             </div>
         </div>
-
-        <div class="col-12 mt-3">
-            <div class="card card-custom p-4 text-center">
-                <h5 class="mb-3 text-start">السجل السحابي المباشر 🧾</h5>
-                <div class="table-responsive">
-                    <table class="table table-dark table-striped">
-                        <thead><tr><th>العملية</th><th>الصنف</th><th>الكمية</th><th>الجهة</th><th>الوقت</th></tr></thead>
-                        <tbody id="logs"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -114,7 +113,6 @@
 
     let currentStock = {};
 
-    // مزامنة المخزون
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val() || {};
         currentStock = data;
@@ -125,7 +123,6 @@
         });
     });
 
-    // مزامنة الحساسات
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
@@ -140,20 +137,12 @@
         }
     });
 
-    // مزامنة السجل
-    db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
-        const data = snapshot.val();
-        let html = "";
-        if(data) {
-            Object.values(data).reverse().forEach(log => {
-                html += `<tr>
-                    <td><span class="badge ${log.type === 'وارد' ? 'bg-success' : 'bg-danger'}">${log.type}</span></td>
-                    <td>${log.item}</td><td>${log.qty}</td><td>${log.person}</td><td>${log.time}</td>
-                </tr>`;
-            });
-        }
-        document.getElementById('logs').innerHTML = html;
-    });
+    // وظيفة إظهار التنبيه المخصص للجوال
+    function showMobileAlert() {
+        const alertBox = document.getElementById('custom-alert');
+        alertBox.style.display = 'block';
+        setTimeout(() => { alertBox.style.display = 'none'; }, 4000); // يختفي بعد 4 ثواني
+    }
 
     let scanner;
     function onScanSuccess(decodedText) {
@@ -163,16 +152,11 @@
             let qty = parseInt(amount) || 0;
             let stockNow = currentStock[item] || 0;
 
-            // هنا الحماية الحقيقية للباركود
-            if (action === 'منصرف') {
-                if (qty > stockNow) {
-                    alert("الصنف المطلوب غير متوفر في المخزن.");
-                    // لا نكمل العملية هنا أبداً
-                    return; 
-                }
+            if (action === 'منصرف' && qty > stockNow) {
+                showMobileAlert(); // استدعاء التنبيه المخصص بدل الـ alert
+                return;
             }
 
-            // إذا عدى الفحص، الحين نسجل في الواجهة ونرسل للفايربيس
             scanner.clear();
             document.getElementById('rescanButton').style.display = 'block';
             document.getElementById('itemSelect').value = item;
@@ -193,32 +177,24 @@
         let item = document.getElementById('itemSelect').value;
         let qty = parseInt(document.getElementById('qty').value) || 0;
         let person = document.getElementById('personName').value || "سالم";
-        let time = new Date().toLocaleTimeString('ar-SA');
         let stockNow = currentStock[item] || 0;
 
-        // حماية إضافية في حالة الإدخال اليدوي
-        if (type === 'منصرف') {
-            if (qty > stockNow) {
-                alert("الصنف المطلوب غير متوفر في المخزن.");
-                return;
-            }
+        if (type === 'منصرف' && qty > stockNow) {
+            showMobileAlert();
+            return;
         }
 
         db.ref(`Inventory/${item}`).transaction((current) => {
             let newCount = type === 'وارد' ? (current || 0) + qty : (current || 0) - qty;
-            // ضمان نهائي إن الفايربيس ما يسجل سالب لو صار أي غلط بالواجهة
-            return newCount < 0 ? current : newCount; 
+            return newCount < 0 ? current : newCount;
         });
-        db.ref("Logs").push({ item, qty, person, type, time });
+        db.ref("Logs").push({ item, qty, person, type, time: new Date().toLocaleTimeString('ar-SA') });
     }
 
     function clearAllData() {
-        if(confirm("سيتم تصفير المخزون والسجلات فقط، هل أنت متأكد؟")) {
+        if(confirm("تصفير المخزون؟")) {
             db.ref("Inventory").remove();
-            db.ref("Logs").remove().then(() => {
-                alert("تم تصفير النظام بنجاح.");
-                location.reload();
-            });
+            db.ref("Logs").remove().then(() => { location.reload(); });
         }
     }
 </script>
