@@ -15,15 +15,16 @@
         #reader { width: 100%; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid #38bdf8; min-height: 250px; }
         .rescan-btn { display: none; margin-top: 10px; width: 100%; font-weight: bold; }
         .btn-clear { background-color: #dc3545; border: none; color: white; margin-top: 20px; font-size: 0.8rem; opacity: 0.6; }
-        .btn-clear:hover { opacity: 1; }
         
-        /* تنبيه الجوال المخصص */
-        #custom-alert {
+        /* تنبيهات النظام المخصصة */
+        .alert-box {
             display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            z-index: 9999; width: 90%; max-width: 400px; padding: 15px;
-            background-color: #dc3545; color: white; text-align: center;
-            border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-weight: bold;
+            z-index: 9999; width: 90%; max-width: 450px; padding: 15px;
+            color: white; text-align: center; border-radius: 10px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); font-weight: bold;
         }
+        .alert-danger { background-color: #dc3545; }
+        .alert-warning { background-color: #f59e0b; color: #000; }
 
         .blink { animation: blinker 1s linear infinite; color: #ff4444 !important; }
         @keyframes blinker { 50% { opacity: 0; } }
@@ -31,7 +32,9 @@
 </head>
 <body>
 
-<div id="custom-alert">الصنف المطلوب غير متوفر في المخزن.</div>
+<div id="stock-alert" class="alert-box alert-danger">الصنف المطلوب غير متوفر في المخزن.</div>
+<div id="temp-alert" class="alert-box alert-danger">⚠️ تنبيه: درجة الحرارة في المستودع مرتفعة جداً!</div>
+<div id="hum-alert" class="alert-box alert-warning">⚠️ تنبيه: مستوى الرطوبة عالٍ في المستودع!</div>
 
 <div class="hero-section text-center">
     <h2>نظام إدارة مستودع الحاسب الآلي (صمام)</h2>
@@ -128,44 +131,58 @@
     db.ref("Inventory").on("value", (snapshot) => {
         const data = snapshot.val() || {};
         currentStock = data;
-        const items = ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"];
-        items.forEach(item => {
-            let val = data[item] || 0;
-            document.getElementById(`count-${item}`).innerText = val;
+        ["شواحن", "طابعات", "أحبار", "حواسب", "فارات"].forEach(item => {
+            document.getElementById(`count-${item}`).innerText = data[item] || 0;
         });
     });
 
     db.ref("WMS").on("value", (snapshot) => {
         const data = snapshot.val();
         if(data) {
-            document.getElementById('temp').innerText = data.Temperature || "--";
-            document.getElementById('hum').innerText = data.Humidity || "--";
+            let t = parseFloat(data.Temperature) || 0;
+            let h = parseFloat(data.Humidity) || 0;
             let smoke = data.Smoke || 0;
+
+            document.getElementById('temp').innerText = t;
+            document.getElementById('hum').innerText = h;
             document.getElementById('smoke-val').innerText = smoke;
+
+            // مراقبة الحرارة (30 درجة)
+            if(t >= 30) {
+                document.getElementById('temp-alert').style.display = 'block';
+                document.getElementById('temp').classList.add('blink');
+            } else {
+                document.getElementById('temp-alert').style.display = 'none';
+                document.getElementById('temp').classList.remove('blink');
+            }
+
+            // مراقبة الرطوبة (65%)
+            if(h >= 65) {
+                document.getElementById('hum-alert').style.display = 'block';
+            } else {
+                document.getElementById('hum-alert').style.display = 'none';
+            }
+
+            // مراقبة الدخان
             let statusBox = document.getElementById('fire-status');
             if(smoke < 500) { statusBox.innerText = "الجو صافي ✅"; statusBox.className = "fw-bold p-2 rounded bg-success text-white"; }
-            else if(smoke >= 500 && smoke <= 1000) { statusBox.innerText = "دخان خفيف ⚠️"; statusBox.className = "fw-bold p-2 rounded bg-warning text-dark"; }
             else { statusBox.innerText = "خطر حريق! 🔥"; statusBox.className = "fw-bold p-2 rounded bg-danger text-white blink"; }
         }
     });
 
-    // كود عرض السجل في الجدول
     db.ref("Logs").limitToLast(10).on("value", (snapshot) => {
         const data = snapshot.val();
         let html = "";
         if(data) {
             Object.values(data).reverse().forEach(log => {
-                html += `<tr>
-                    <td><span class="badge ${log.type === 'وارد' ? 'bg-success' : 'bg-danger'}">${log.type}</span></td>
-                    <td>${log.item}</td><td>${log.qty}</td><td>${log.person}</td><td>${log.time}</td>
-                </tr>`;
+                html += `<tr><td><span class="badge ${log.type === 'وارد' ? 'bg-success' : 'bg-danger'}">${log.type}</span></td><td>${log.item}</td><td>${log.qty}</td><td>${log.person}</td><td>${log.time}</td></tr>`;
             });
         }
         document.getElementById('logs').innerHTML = html;
     });
 
-    function showMobileAlert() {
-        const alertBox = document.getElementById('custom-alert');
+    function showStockAlert() {
+        const alertBox = document.getElementById('stock-alert');
         alertBox.style.display = 'block';
         setTimeout(() => { alertBox.style.display = 'none'; }, 4000);
     }
@@ -179,10 +196,9 @@
             let stockNow = currentStock[item] || 0;
 
             if (action === 'منصرف' && qty > stockNow) {
-                showMobileAlert();
+                showStockAlert();
                 return;
             }
-
             scanner.clear();
             document.getElementById('rescanButton').style.display = 'block';
             document.getElementById('itemSelect').value = item;
@@ -206,7 +222,7 @@
         let stockNow = currentStock[item] || 0;
 
         if (type === 'منصرف' && qty > stockNow) {
-            showMobileAlert();
+            showStockAlert();
             return;
         }
 
